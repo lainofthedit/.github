@@ -1,0 +1,47 @@
+name: Auto Reassign PR
+
+on:
+  pull_request:
+    types: [review_requested]
+
+jobs:
+  reassign:
+    if: contains(github.event.requested_reviewer.login, 'ai-bot')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config user.name "Leonid"
+          git config user.email "lyonyauei@gmail.com"
+
+      - name: Fetch PR branch
+        run: |
+          git fetch origin pull/${{ github.event.pull_request.number }}/head:pr-${{ github.event.pull_request.number }}
+          git checkout pr-${{ github.event.pull_request.number }}
+
+      - name: Push branch as bot
+        run: |
+          NEW_BRANCH=ai-pr-${{ github.event.pull_request.number }}
+          git push origin HEAD:$NEW_BRANCH
+
+      - name: Close original PR
+        run: |
+          gh pr close ${{ github.event.pull_request.number }} \
+            -R ${{ github.repository }} \
+            --comment "Recreated by ai-bot"
+
+      - name: Create new PR as bot
+        env:
+          GH_TOKEN: ${{ secrets.SECRET }}
+        run: |
+          gh pr create \
+            -R ${{ github.repository }} \
+            --base ${{ github.event.pull_request.base.ref }} \
+            --head ai-pr-${{ github.event.pull_request.number }} \
+            --title "${{ github.event.pull_request.title }}" \
+            --body "${{ github.event.pull_request.body }}"
